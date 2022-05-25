@@ -1,0 +1,12 @@
+[blank]: blank
+
+# musical_calculator
+A handful of helpful algorithms to help study the nature of music. Before I started learning to program way back in the early 2010's I really wanted to know the answer to a particular question: "How many scales are there with the western 12 note chromatic scale?" My first guess was "probably in the millions." But to my surprise once I looked up how to calculate the permutations and more importantly the combinations of the 12 note scale I learned that it's significantly less.
+
+I realized though that the combination count calculation was still more than was actually relevant to the question, because I really only need the combinations of one key, not all of them. But now I had a problem. How the heck was I supposed to calculate that? I knew that it had to be a significantly smaller portion than the total combinations possible, and because I had no idea how to write a program for the computer and barely any math skills appropriate to approach the problem I decided to do something completely ridiculous, but was sure to lead closer to the answer of my original question.
+
+I literally wrote them out by hand, one after another. I used huge art paper and diligently worked my way through the problem so as to avoid as many mistakes as possible. I made a few test runs with some of the smaller possible scales and then proceeded forward to completion with all the notes. Turns out that my work back then came out perfectly, because this program now proves that there indeed 2048 possible modes with a 12-note chromatic scale. This was such a huge cut from the millions that I originally thought might be possible, and I realized that my natural inclination to know the actual number of scales as opposed to modes was going to pay off.
+
+Now that I had the modes it was a much simpler and far less daunting task to actually eliminate all the mode revolutions and leave only one mode per unique scale. That would mean equating the diatonic scale's modes as one, so any one of them would be enough to represent the other 6. After completion of this amazingly fulfilling task which took a least a couple of weeks, I came to the conclusion that there are exactly 351 unique scales that can be derived from a twelve note chromatic scale, such as we use here in the west.
+
+It may have taken several weeks to do it manually, but this program which I'm now capable of writing a decade later took only a work-day's worth of time to confirm that my manual calculations were indeed correct.

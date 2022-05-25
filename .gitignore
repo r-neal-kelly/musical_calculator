@@ -1,0 +1,9 @@
+/.git
+/.vs
+/.vscode
+/.VSCodeCounter
+/*/.VSCodeCounter
+/build
+/out
+
+CMakeUserPresets.json
