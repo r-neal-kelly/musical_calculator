@@ -1,3 +1,7 @@
+/*
+    Copyright 2022 r-neal-kelly
+*/
+
 #include <cassert>
 #include <cstdint>
 #include <iostream>
