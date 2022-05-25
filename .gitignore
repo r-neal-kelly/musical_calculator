@@ -3,6 +3,7 @@
 /.vscode
 /.VSCodeCounter
 /*/.VSCodeCounter
+/x64
 /build
 /out
 
