@@ -131,6 +131,8 @@ namespace musical_calculator {
     std::vector<std::vector<std::size_t>>
         Modes(std::size_t chromatic_note_count)
     {
+        // we should probably parallelize this func after say, 16 or so.
+
         std::vector<std::size_t> mode;
         std::vector<std::vector<std::size_t>> modes;
 
@@ -308,7 +310,7 @@ namespace musical_calculator {
         Print_Note_Sets(diatonic_modes, "diatonic mode");
 
         {
-            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
+            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 24;
                  chromatic_note_count <= last_chromatic_note_count;
                  chromatic_note_count += 1) {
                 std::size_t mode_count = Modes(chromatic_note_count).size();
