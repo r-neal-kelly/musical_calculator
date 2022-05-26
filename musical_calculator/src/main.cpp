@@ -72,44 +72,41 @@ namespace musical_calculator {
     /*
         This gets all the possible modes of the musical scale.
         It only gathers modes for one key, the first note in the scale.
-        We may paramtize this to take the origin note (the key) and how many
-        total notes are in the scale (default of 12).
 
-        Keep in mind that these are not scales but modes. In order to get scales
-        we would need to remove all the modal repeats, e.g. we would keep Ionian
-        as the Diatonic scale and remove Dorian, Lydian, Aeolion, etc.
+        Keep in mind that these are not scales but modes. Scales have more
+        than one mode, e.g. the Diatonic scale has Ionian, Lydian, Aeolion, etc.
 
-        It's important to understand that this does not return all the possible
-        permutations of the notes involved, but only combinations.
-        However it doesn not return all the total possible combinations.
-        It would no longer be relevant as modes or scales. It would rather be
-        melodies without repeats, in which order does not matter. Not very useful.
+        mode_note_count:
+            the size of each resultant mode.
+        chromatic_note_count:
+            the size of the chromatic mode/scale, i.e. the max number of notes.
+        mode_cache:
+            an optimzation to prevent the reallocation of a vector for repeated calls.
+        modes_cache:
+            the resultant modes, your return value. an optimization to prevent the reallocation of a vector for repeated calls.
     */
-    std::vector<std::vector<std::size_t>>
-        Modes()
+    void
+        Modes(std::size_t mode_note_count,
+              std::size_t chromatic_note_count,
+              std::vector<std::size_t>& mode_cache,
+              std::vector<std::vector<std::size_t>>& modes_cache)
     {
-        // we always include the octave up front, which we consider a mode.
-        std::vector<std::vector<std::size_t>> modes;
-        modes.reserve(Mode_Count());
-        modes.push_back({ 1 });
+        assert(mode_note_count > 0);
+        assert(mode_note_count <= chromatic_note_count);
 
-        // we work through all the mode iterations up to and including the
-        // chromatic scale, which like the octave is also considered a mode.
-        for (std::size_t take_count = 2, take_total = 12; take_count <= take_total; take_count += 1) {
-            // we need to cache the previous iterations of the notes for the sake of the algorithm.
-            // it's relatively cheap to just copy these small vectors into the results anyway.
-            std::vector<std::size_t> notes;
-            notes.reserve(take_count);
-            notes.push_back(1);
+        mode_cache.clear();
+        mode_cache.reserve(mode_note_count);
 
-            // the first iteration is simply all the possible notes that can be taken
-            // from the chromatic scale, without any skips.
-            while (notes.size() < take_count) {
-                notes.push_back(notes[notes.size() - 1] + 1);
-            }
-            modes.push_back(notes);
+        // the first mode is simply all the possible notes that can be taken
+        // from the chromatic scale without any skips, up to the mode_note_count.
+        for (std::size_t note = 1, last_note = mode_note_count; note <= last_note; note += 1) {
+            mode_cache.push_back(note);
+        }
+        modes_cache.push_back(mode_cache);
 
-            // we then proceed to mutate the notes cache by incrementing each place
+        // we never change the first place, so if that's all there is, we go ahead and return.
+        if (mode_note_count > 1) {
+            // we can now proceed to mutate the mode by incrementing each place
             // from the least significant digit to the most significant digit.
             // we do not increment a place past the value of the lesser place to its
             // right, thus we end up with combinations instead of permutations.
@@ -117,35 +114,34 @@ namespace musical_calculator {
                 // get the least significant digit iterations first,
                 // because we can't check a lesser place. Therefore it
                 // can allow upto the total number of notes possible.
-                while (notes[take_count - 1] + 1 <= 12) {
-                    notes[take_count - 1] += 1;
-                    modes.push_back(notes);
+                while (mode_cache[mode_note_count - 1] + 1 <= chromatic_note_count) {
+                    mode_cache[mode_note_count - 1] += 1;
+                    modes_cache.push_back(mode_cache);
                 }
 
                 // we need to find a greater place that can be incremented.
-                // if it doesn't exist, then we can proceed with the next batch
-                // of a different take count. we don't consider idx 0 because
-                // we're only working with the one key, and so it can never
-                // be more than 1.
-                std::size_t prev_idx = 0;
-                bool found_prev_idx = false;
-                for (std::size_t idx = notes.size() - 2; idx > 0; idx -= 1) {
-                    if (notes[idx] + 1 < notes[idx + 1]) {
-                        prev_idx = idx;
-                        found_prev_idx = true;
+                // if it doesn't exist, then we are finished. we don't consider
+                // idx 0 because we're only working with the one key, and so it
+                // can never be more than 1, and is thus never incrementable.
+                std::size_t next_idx = 0;
+                bool found_next_idx = false;
+                for (std::size_t idx = mode_cache.size() - 2; idx > 0; idx -= 1) {
+                    if (mode_cache[idx] + 1 < mode_cache[idx + 1]) {
+                        next_idx = idx;
+                        found_next_idx = true;
 
                         break;
                     }
                 }
 
                 // if we did find it, we increment the place by one and reset
-                // the lesser places for another iteration.
-                if (found_prev_idx) {
-                    notes[prev_idx] += 1;
-                    for (std::size_t idx = prev_idx + 1, end = notes.size(); idx < end; idx += 1) {
-                        notes[idx] = notes[idx - 1] + 1;
+                // the lesser places for another iteration of while(true).
+                if (found_next_idx) {
+                    mode_cache[next_idx] += 1;
+                    for (std::size_t idx = next_idx + 1, end = mode_cache.size(); idx < end; idx += 1) {
+                        mode_cache[idx] = mode_cache[idx - 1] + 1;
                     }
-                    modes.push_back(notes);
+                    modes_cache.push_back(mode_cache);
 
                     continue;
                 } else {
@@ -153,8 +149,38 @@ namespace musical_calculator {
                 }
             }
         }
+    }
+
+    void
+        Modes(std::size_t chromatic_note_count,
+              std::vector<std::size_t>& mode_cache,
+              std::vector<std::vector<std::size_t>>& modes_cache)
+    {
+        mode_cache.reserve(chromatic_note_count);
+        modes_cache.clear();
+
+        for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
+             mode_note_count <= last_mode_note_count;
+             mode_note_count += 1) {
+            Modes(mode_note_count, chromatic_note_count, mode_cache, modes_cache);
+        }
+    }
+
+    std::vector<std::vector<std::size_t>>
+        Modes(std::size_t chromatic_note_count)
+    {
+        std::vector<std::size_t> mode;
+        std::vector<std::vector<std::size_t>> modes;
+
+        Modes(chromatic_note_count, mode, modes);
 
         return modes;
+    }
+
+    std::vector<std::vector<std::size_t>>
+        Modes()
+    {
+        return Modes(12);
     }
 
     /*
