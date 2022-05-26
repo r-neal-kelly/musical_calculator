@@ -7,18 +7,76 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
 namespace musical_calculator {
 
+    constexpr std::size_t MAX_CHROMATIC_NOTE_COUNT = 24;
+
+    /*
+        Gets the number of modes found within a chromatic scale
+        when the mode must be a certain number of notes long.
+    */
+    constexpr std::size_t
+        Mode_Count(const std::size_t chromatic_note_count,
+                   const std::size_t mode_note_count)
+    {
+        // We calculate this up front because it's prohibitively expensive
+        // to calculate combinations, which requires factorial. otherwise
+        // we could just calculate the first half including the median for
+        // odd chromatics. (the numbers are mirrored as seen below.)
+        //  if mode_note_count > 1
+        //      return (chromatic_note_count - 1) choose (mode_note_count - 1)
+        //  else
+        //      return 1
+        constexpr std::size_t MODE_COUNTS[24][24] = {
+            { 1 },
+            { 1, 1 },
+            { 1, 2, 1 },
+            { 1, 3, 3, 1 },
+            { 1, 4, 6, 4, 1 },
+            { 1, 5, 10, 10, 5, 1 },
+            { 1, 6, 15, 20, 15, 6, 1 },
+            { 1, 7, 21, 35, 35, 21, 7, 1 },
+            { 1, 8, 28, 56, 70, 56, 28, 8, 1 },
+            { 1, 9, 36, 84, 126, 126, 84, 36, 9, 1 },
+            { 1, 10, 45, 120, 210, 252, 210, 120, 45, 10, 1 },
+            { 1, 11, 55, 165, 330, 462, 462, 330, 165, 55, 11, 1 },
+            { 1, 12, 66, 220, 495, 792, 924, 792, 495, 220, 66, 12, 1 },
+            { 1, 13, 78, 286, 715, 1287, 1716, 1716, 1287, 715, 286, 78, 13, 1 },
+            { 1, 14, 91, 364, 1001, 2002, 3003, 3432, 3003, 2002, 1001, 364, 91, 14, 1 },
+            { 1, 15, 105, 455, 1365, 3003, 5005, 6435, 6435, 5005, 3003, 1365, 455, 105, 15, 1 },
+            { 1, 16, 120, 560, 1820, 4368, 8008, 11440, 12870, 11440, 8008, 4368, 1820, 560, 120, 16, 1 },
+            { 1, 17, 136, 680, 2380, 6188, 12376, 19448, 24310, 24310, 19448, 12376, 6188, 2380, 680, 136, 17, 1 },
+            { 1, 18, 153, 816, 3060, 8568, 18564, 31824, 43758, 48620, 43758, 31824, 18564, 8568, 3060, 816, 153, 18, 1 },
+            { 1, 19, 171, 969, 3876, 11628, 27132, 50388, 75582, 92378, 92378, 75582, 50388, 27132, 11628, 3876, 969, 171, 19, 1 },
+            { 1, 20, 190, 1140, 4845, 15504, 38760, 77520, 125970, 167960, 184756, 167960, 125970, 77520, 38760, 15504, 4845, 1140, 190, 20, 1 },
+            { 1, 21, 210, 1330, 5985, 20349, 54264, 116280, 203490, 293930, 352716, 352716, 293930, 203490, 116280, 54264, 20349, 5985, 1330, 210, 21, 1 },
+            { 1, 22, 231, 1540, 7315, 26334, 74613, 170544, 319770, 497420, 646646, 705432, 646646, 497420, 319770, 170544, 74613, 26334, 7315, 1540, 231, 22, 1 },
+            { 1, 23, 253, 1771, 8855, 33649, 100947, 245157, 490314, 817190, 1144066, 1352078, 1352078, 1144066, 817190, 490314, 245157, 100947, 33649, 8855, 1771, 253, 23, 1 }
+        };
+
+        assert(mode_note_count > 0);
+        assert(mode_note_count <= chromatic_note_count);
+        assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
+
+        return MODE_COUNTS[chromatic_note_count - 1][mode_note_count - 1];
+    }
+
     /*
         Gets the total number of modes found within a chromatic scale.
     */
     constexpr std::size_t
-        Mode_Count(std::size_t chromatic_note_count)
+        Mode_Count(const std::size_t chromatic_note_count)
     {
+        // I would like to investigate supporting chromatic scales longer than 64
+        // but I can't help to think that it would rarely if every be useful
+        // and would be little more than a curiousity at best. 64 is plenty for now.
+        // However if we did support it, we would need to have a big integer type.
         assert(chromatic_note_count > 0);
+        assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
         assert(chromatic_note_count <= sizeof(std::size_t) * CHAR_BIT);
 
         return std::size_t(1) << (chromatic_note_count - 1);
@@ -47,16 +105,18 @@ namespace musical_calculator {
             the resultant modes, your return value. an optimization to prevent the reallocation of a vector for repeated calls.
     */
     void
-        Modes(std::size_t mode_note_count,
-              std::size_t chromatic_note_count,
+        Modes(const std::size_t chromatic_note_count,
+              const std::size_t mode_note_count,
               std::vector<std::size_t>& mode_cache,
               std::vector<std::vector<std::size_t>>& modes_cache)
     {
         assert(mode_note_count > 0);
         assert(mode_note_count <= chromatic_note_count);
+        assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
 
         mode_cache.clear();
         mode_cache.reserve(mode_note_count);
+        modes_cache.reserve(Mode_Count(chromatic_note_count, mode_note_count));
 
         // the first mode is simply all the possible notes that can be taken
         // from the chromatic scale without any skips, up to the mode_note_count.
@@ -86,7 +146,7 @@ namespace musical_calculator {
                 // can never be more than 1, and is thus never incrementable.
                 std::size_t next_idx = 0;
                 bool found_next_idx = false;
-                for (std::size_t idx = mode_cache.size() - 2; idx > 0; idx -= 1) {
+                for (std::size_t idx = mode_note_count - 2; idx > 0; idx -= 1) {
                     if (mode_cache[idx] + 1 < mode_cache[idx + 1]) {
                         next_idx = idx;
                         found_next_idx = true;
@@ -113,7 +173,7 @@ namespace musical_calculator {
     }
 
     void
-        Modes(std::size_t chromatic_note_count,
+        Modes(const std::size_t chromatic_note_count,
               std::vector<std::size_t>& mode_cache,
               std::vector<std::vector<std::size_t>>& modes_cache)
     {
@@ -124,15 +184,73 @@ namespace musical_calculator {
         for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
              mode_note_count <= last_mode_note_count;
              mode_note_count += 1) {
-            Modes(mode_note_count, chromatic_note_count, mode_cache, modes_cache);
+            Modes(chromatic_note_count, mode_note_count, mode_cache, modes_cache);
+        }
+    }
+
+    void
+        Modes_Parallel(const std::size_t chromatic_note_count,
+                       std::vector<std::size_t>& mode_cache,
+                       std::vector<std::vector<std::size_t>>& modes_cache)
+    {
+        // right now we're doing all of the tiers in their own threads, even ones
+        // that are more expensive to do in a thread, such as the octave and
+        // chromatic modes.
+        mode_cache.reserve(chromatic_note_count);
+        modes_cache.clear();
+        modes_cache.reserve(Mode_Count(chromatic_note_count));
+
+        // because we have a limit on the chromatic_note_count,
+        // we'll just spawn all threads at the same time and let the os
+        // schedule everything for us automatically. this makes sense because
+        // some of these threads have to do a lot more work than others, and
+        // when an easy one finishes before a hard one, we might as well get
+        // it started on another.
+        std::vector<std::jthread> threads;
+        threads.reserve(chromatic_note_count);
+
+        // if we can calculate easily the amount of modes that in each tier then
+        // we can make the array and hand out pointers to the threads to fill in for us.
+        // as it is, we would have to do a lot of copying which may defeat the gains from
+        // parallelization. another option would be to change the data-structure such
+        // that it's a vector of vectors of tiers of vectors of notes.
+
+        // I think to get this right we'll need to update the underlying Modes algorithm to
+        // write to pointers for us. that means anything above it will have to make sure that
+        // it has allocated the necessary memory, which is no longer a problem now that we know
+        // the exact number of possible modes per tier, statically at that.
+        // Probably want to keep the old algorithm around because that's how we determined the
+        // numbers in the first place.
+        std::vector<std::vector<std::size_t>*> pointers;
+        pointers.reserve(modes_cache.size());
+
+        for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
+             mode_note_count <= last_mode_note_count;
+             mode_note_count += 1) {
+            threads.push_back(std::jthread(
+                []() -> void
+                {
+                    //Modes(chromatic_note_count, mode_note_count, mode_cache, modes_cache);
+                }
+            ));
         }
     }
 
     std::vector<std::vector<std::size_t>>
-        Modes(std::size_t chromatic_note_count)
+        Modes(const std::size_t chromatic_note_count,
+              const std::size_t mode_note_count)
     {
-        // we should probably parallelize this func after say, 16 or so.
+        std::vector<std::size_t> mode;
+        std::vector<std::vector<std::size_t>> modes;
 
+        Modes(chromatic_note_count, mode_note_count, mode, modes);
+
+        return modes;
+    }
+
+    std::vector<std::vector<std::size_t>>
+        Modes(const std::size_t chromatic_note_count)
+    {
         std::vector<std::size_t> mode;
         std::vector<std::vector<std::size_t>> modes;
 
@@ -150,6 +268,7 @@ namespace musical_calculator {
     constexpr std::size_t
         Scale_Count()
     {
+        // this needs to be updated to handle different chromatic scales, in fact the entire scale section does.
         return 351;
     }
 
@@ -310,7 +429,7 @@ namespace musical_calculator {
         Print_Note_Sets(diatonic_modes, "diatonic mode");
 
         {
-            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 24;
+            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
                  chromatic_note_count <= last_chromatic_note_count;
                  chromatic_note_count += 1) {
                 std::size_t mode_count = Modes(chromatic_note_count).size();
@@ -325,6 +444,23 @@ namespace musical_calculator {
                 std::cout << message << std::endl;
             }
         }
+
+        std::cout << std::endl;
+
+        {
+            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
+                 chromatic_note_count <= last_chromatic_note_count;
+                 chromatic_note_count += 1) {
+                for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
+                     mode_note_count <= last_mode_note_count;
+                     mode_note_count += 1) {
+                    auto modes = Modes(chromatic_note_count, mode_note_count);
+                    assert(modes.size() == Mode_Count(chromatic_note_count, mode_note_count));
+                }
+            }
+        }
+
+        std::cout << std::endl;
     }
 
 }
