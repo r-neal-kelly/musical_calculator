@@ -3,6 +3,7 @@
 */
 
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -11,62 +12,22 @@
 
 namespace musical_calculator {
 
-    enum class note_e :
-        std::uint8_t
-    {
-        NONE_lb,
-
-        A,
-        A$,
-        B,
-        C,
-        C$,
-        D,
-        D$,
-        E,
-        F,
-        F$,
-        G,
-        G$,
-
-        MIN_lb = A,
-        MAX_lb = G$,
-    };
-
     /*
-        We can cache this for the 12 note scale, because it's always going to be the same.
-        However if we paramtize these functions, we'll need to calculate anything we don't know.
-        It does help to keep this constexpr so that the ones we do know don't take any runtime.
+        Gets the total number of modes found within a chromatic scale.
     */
+    constexpr std::size_t
+        Mode_Count(std::size_t chromatic_note_count)
+    {
+        assert(chromatic_note_count > 0);
+        assert(chromatic_note_count <= sizeof(std::size_t) * CHAR_BIT);
+
+        return std::size_t(1) << (chromatic_note_count - 1);
+    }
+
     constexpr std::size_t
         Mode_Count()
     {
-        return 2048;
-    }
-
-    constexpr std::size_t
-        Scale_Count()
-    {
-        return 351;
-    }
-
-    /*
-        Prints out a vector of note sets, primarly for testing.
-    */
-    void
-        Print_Note_Sets(const std::vector<std::vector<std::size_t>>& note_sets, std::string unit_name = "note_set")
-    {
-        std::cout << "total " + unit_name + " count: " << note_sets.size() << std::endl;
-
-        for (std::size_t idx = 0, end = note_sets.size(); idx < end; idx += 1) {
-            const std::vector<std::size_t>& note_set = note_sets.at(idx);
-            std::string string;
-            for (std::size_t idx = 0, end = note_set.size(); idx < end; idx += 1) {
-                string += static_cast<char>(note_set.at(idx)) + '0';
-            }
-            std::cout << string << std::endl;
-        }
-        std::cout << std::endl;
+        return Mode_Count(12);
     }
 
     /*
@@ -158,6 +119,7 @@ namespace musical_calculator {
     {
         mode_cache.reserve(chromatic_note_count);
         modes_cache.clear();
+        modes_cache.reserve(Mode_Count(chromatic_note_count));
 
         for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
              mode_note_count <= last_mode_note_count;
@@ -181,6 +143,31 @@ namespace musical_calculator {
         Modes()
     {
         return Modes(12);
+    }
+
+    constexpr std::size_t
+        Scale_Count()
+    {
+        return 351;
+    }
+
+    /*
+        Prints out a vector of note sets, primarly for testing.
+    */
+    void
+        Print_Note_Sets(const std::vector<std::vector<std::size_t>>& note_sets, std::string unit_name = "note_set")
+    {
+        std::cout << "total " + unit_name + " count: " << note_sets.size() << std::endl;
+
+        for (std::size_t idx = 0, end = note_sets.size(); idx < end; idx += 1) {
+            const std::vector<std::size_t>& note_set = note_sets.at(idx);
+            std::string string;
+            for (std::size_t idx = 0, end = note_set.size(); idx < end; idx += 1) {
+                string += static_cast<char>(note_set.at(idx)) + '0';
+            }
+            std::cout << string << std::endl;
+        }
+        std::cout << std::endl;
     }
 
     /*
@@ -319,6 +306,23 @@ namespace musical_calculator {
         std::vector<std::vector<std::size_t>> diatonic_modes = To_Modes(diatonic_scale);
 
         Print_Note_Sets(diatonic_modes, "diatonic mode");
+
+        {
+            for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
+                 chromatic_note_count <= last_chromatic_note_count;
+                 chromatic_note_count += 1) {
+                std::size_t mode_count = Modes(chromatic_note_count).size();
+                assert(mode_count == Mode_Count(chromatic_note_count));
+
+                std::string message =
+                    "there are " +
+                    std::to_string(mode_count) +
+                    " modes in a " +
+                    std::to_string(chromatic_note_count) +
+                    " note chromatic scale.";
+                std::cout << message << std::endl;
+            }
+        }
     }
 
 }
