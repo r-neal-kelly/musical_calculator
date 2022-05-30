@@ -176,6 +176,84 @@ namespace musical_calculator {
         class scale_tier_t
         {
         public:
+            static void
+                Scale_Modes(const note_t*       scale,
+                            const std::size_t   scale_note_count,
+                            note_t* const       results)
+            {
+                for (std::size_t idx = 0, end = scale_note_count; idx < end; idx += 1) {
+                    results[idx] = scale[idx];
+                }
+
+                for (std::size_t previous_mode_idx = 0, previous_mode_end = scale_note_count * scale_note_count - scale_note_count;
+                     previous_mode_idx < previous_mode_end;
+                     previous_mode_idx += scale_note_count) {
+                    const std::size_t this_mode_idx = previous_mode_idx + scale_note_count;
+
+                    // first, we revolve the actual notes as they appear from the previous mode.
+                    // then we set the last new note to the previous's first + the chromatic_note_count.
+                    for (std::size_t note_idx = 0, note_end = scale_note_count - 1;
+                         note_idx < note_end;
+                         note_idx += 1) {
+                        results[this_mode_idx + note_idx] = results[previous_mode_idx + note_idx + 1];
+                    }
+                    results[this_mode_idx + scale_note_count - 1] = results[previous_mode_idx + 0] + CHROMATIC_NOTE_COUNT_p;
+
+                    // then for each subsequent note after the new first note,
+                    // we add the total note count and subtract by new_first_note - 1.
+                    const std::size_t first_note_diff = results[this_mode_idx + 0] - 1;
+                    for (std::size_t note_idx = 0, note_end = scale_note_count;
+                         note_idx < note_end;
+                         note_idx += 1) {
+                        results[this_mode_idx + note_idx] = results[this_mode_idx + note_idx] - first_note_diff;
+                    }
+                }
+            }
+
+            static bool
+                Has_Mode_Scale(const std::vector<const note_t*>&    scales,
+                               const note_t*                        mode,
+                               const std::size_t                    mode_note_count,
+                               note_t* const                        note_cache)
+            {
+                // we cache all the possible revolutions of the mode so that
+                // we can quickly search them per scale.
+                Scale_Modes(mode, mode_note_count, note_cache);
+
+                // instead of looking in the vector, what we should do is sort the scale modes
+                // and if they are sorted then return false, else return true because only
+                // a later mode would generate its brethren unsorted. this completely cuts out all
+                // the complexity and we don't even have to do look ups anymore.
+                // the trick then, is how to sort the modes?
+
+                // now we can compare each scale starting from the first to see if it matches one of our scale's modes.
+                for (std::size_t scales_idx = 0, scales_end = scales.size();
+                     scales_idx < scales_end;
+                     scales_idx += 1) {
+                    const note_t* const scale = scales[scales_idx];
+                    for (std::size_t modes_idx = 0, modes_end = mode_note_count * mode_note_count;
+                         modes_idx < modes_end;
+                         modes_idx += mode_note_count) {
+                        const note_t* const mode = note_cache + modes_idx;
+                        bool scale_is_mode = true;
+                        for (std::size_t note_idx = 0, note_end = mode_note_count;
+                             note_idx < note_end;
+                             note_idx += 1) {
+                            if (scale[note_idx] != mode[note_idx]) {
+                                scale_is_mode = false;
+                                break;
+                            }
+                        }
+                        if (scale_is_mode) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
+        public:
             std::vector<const note_t*>  scales;
 
         public:
@@ -187,7 +265,37 @@ namespace musical_calculator {
                          const std::size_t  mode_count,
                          const std::size_t  mode_note_count)
             {
-                // we do need to statically store the amount of unique scales for each chromatic also
+                // we use this to generate all the modes from a scale
+                note_t* note_cache = static_cast<note_t*>(malloc(sizeof(note_t) * mode_note_count * mode_note_count));
+                assert(note_cache != nullptr);
+
+                //this->scales.reserve(0); // once we know all the static values for each chromatic, we can do this up front.
+
+                // just add the first instance of each unique set of modes, which is its scale.
+                for (std::size_t modes_idx = 0, modes_end = mode_count * mode_note_count;
+                     modes_idx < modes_end;
+                     modes_idx += mode_note_count) {
+                    const note_t* const mode = mode_tier.notes + modes_idx;
+                    if (!Has_Mode_Scale(this->scales, mode, mode_note_count, note_cache)) {
+                        scales.push_back(mode);
+                    }
+                }
+
+                free(note_cache);
+            }
+
+        public:
+            void
+                Print_Scales(std::size_t scale_note_count)
+            {
+                for (std::size_t idx = 0, end = this->scales.size(); idx < end; idx += 1) {
+                    const note_t* const scale = this->scales[idx];
+                    std::string scale_string = "";
+                    for (std::size_t idx = 0, end = scale_note_count; idx < end; idx += 1) {
+                        scale_string.push_back('0' + static_cast<char>(scale[idx]));
+                    }
+                    std::cout << scale_string << std::endl;
+                }
             }
         };
 
@@ -290,7 +398,7 @@ namespace musical_calculator {
                         this->scale_tiers[idx] = scale_tier_t(
                             this->mode_tiers[idx],
                             CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx],
-                            CHROMATIC_TIER_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx]
+                            idx + 1
                         );
                     }
                 ));
@@ -320,6 +428,17 @@ namespace musical_calculator {
             return CHROMATIC_MODE_COUNTS[Chromatic_Note_Count() - 1];
         }
 
+        std::size_t
+            Scale_Count()
+        {
+            std::size_t count = 0;
+            for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
+                count += this->scale_tiers[idx].scales.size();
+            }
+
+            return count;
+        }
+
     public:
         void
             Print_Modes()
@@ -328,115 +447,30 @@ namespace musical_calculator {
                 this->mode_tiers[idx].Print_Modes(CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx], idx + 1);
             }
         }
+
+        void
+            Print_Scales()
+        {
+            for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
+                this->scale_tiers[idx].Print_Scales(idx + 1);
+            }
+        }
     };
 
-    ///*
-    //    Takes a mode and results array. Generates all revolutions of a single mode,
-    //    thus achieving all modes of the same scale.
-    //*/
-    //void
-    //    To_Modes(const std::vector<std::size_t>& scale, std::vector<std::vector<std::size_t>>& results)
-    //{
-    //    results.reserve(scale.size());
-    //    results.push_back(scale);
-
-    //    // it's easier if we track the state of the scale, and then we can just keep revolving it
-    //    // to build up our revolutions.
-    //    std::vector<std::size_t> revolution = scale;
-    //    for (std::size_t idx = 1, end = scale.size(); idx < end; idx += 1) {
-    //        // first, we revolve the actual notes as they appear.
-    //        const std::size_t first_note = revolution[0];
-    //        for (std::size_t idx = 0, end = revolution.size() - 1; idx < end; idx += 1) {
-    //            revolution[idx] = revolution[idx + 1];
-    //        }
-    //        revolution[revolution.size() - 1] = first_note;
-
-    //        // then for each subsequent note after the new first note, we add the total note count
-    //        // and subtract by new_first_note - 1. we can then set the new first note to 1
-    //        const std::size_t first_note_diff = revolution[0] - 1;
-    //        revolution[revolution.size() - 1] += 12;
-    //        for (std::size_t idx = 0, end = revolution.size(); idx < end; idx += 1) {
-    //            revolution[idx] = revolution[idx] - first_note_diff;
-    //        }
-
-    //        results.push_back(revolution);
-    //    }
-    //}
-
-    ///*
-    //    This removes modal revolutions, e.g. [1, 2, 3], [1, 11, 12], and [1, 2, 12]
-    //    which are all counted as the same scale. This has the effect of converting modes
-    //    into a set of unique scales. In the above example, the latter two arrays are
-    //    removed and [1, 2, 3] is kept because it proceeds either of the others in the
-    //    passed in array. If that changes then the first occuring mode of a scale is kept.
-    //*/
-    //std::vector<std::vector<std::size_t>>
-    //    To_Scales(const std::vector<std::vector<std::size_t>>& modes)
-    //{
-    //    auto Has_Scale = [](const auto& scales, const auto& mode, const std::size_t search_start_idx) -> bool
-    //    {
-    //        // we cache all the possible revolutions of the mode so that
-    //        // we can quickly search them per scale in the scales vector.
-    //        std::vector<std::vector<std::size_t>> revolutions;
-    //        To_Modes(mode, revolutions);
-
-    //        // now we can compare each scale starting from the first search index to see if it matches one of our revolutions.
-    //        for (std::size_t scales_idx = search_start_idx, scales_end = scales.size(); scales_idx < scales_end; scales_idx += 1) {
-    //            const std::vector<std::size_t>& scale = scales[scales_idx];
-    //            for (std::size_t revolutions_idx = 0, revolutions_end = revolutions.size(); revolutions_idx < revolutions_end; revolutions_idx += 1) {
-    //                const std::vector<std::size_t>& revolution = revolutions[revolutions_idx];
-    //                assert(scale.size() == revolution.size());
-
-    //                bool scale_is_revolution = true;
-    //                for (std::size_t idx = 0, end = scale.size(); idx < end; idx += 1) {
-    //                    if (scale[idx] != revolution[idx]) {
-    //                        scale_is_revolution = false;
-    //                        break;
-    //                    }
-    //                }
-
-    //                if (scale_is_revolution) {
-    //                    return true;
-    //                }
-    //            }
-    //        }
-
-    //        return false;
-    //    };
-
-    //    std::vector<std::vector<std::size_t>> scales;
-    //    scales.reserve(Scale_Count());
-
-    //    std::size_t curr_take_count = 0;
-    //    std::size_t curr_start_idx = 0;
-
-    //    for (std::size_t idx = 0, end = modes.size(); idx < end; idx += 1) {
-    //        const std::vector<std::size_t>& mode = modes[idx];
-
-    //        // if this is the first mode of this take_count, then we simply add it
-    //        // and track its position in the scales array. That way we don't have
-    //        // to search the entire array when we compare it with its modes in Has_Scale.
-    //        if (curr_take_count < mode.size()) {
-    //            curr_take_count = mode.size();
-    //            curr_start_idx = scales.size();
-    //            scales.push_back(mode);
-    //        } else {
-    //            // we have to determine if one of the revolutions already exists in the scales vector.
-    //            // if it doesn't then add this mode, else skip adding it.
-    //            if (!Has_Scale(scales, mode, curr_start_idx)) {
-    //                scales.push_back(mode);
-    //            }
-    //        }
-    //    }
-
-    //    return scales;
-    //}
-
+    template <std::size_t idx = 0>
     void
         Print_Tests()
     {
-        chromatic_t<12> chromatic;
-        chromatic.Print_Modes();
+        if constexpr (idx < 18 /*MAX_CHROMATIC_NOTE_COUNT*/) {
+            chromatic_t<idx + 1> chromatic;
+
+            std::cout << idx + 1 << std::endl;
+            std::cout << chromatic.Mode_Count() << std::endl;
+            std::cout << chromatic.Scale_Count() << std::endl;
+            std::cout << std::endl;
+
+            Print_Tests<idx + 1>();
+        }
     }
 
 }
