@@ -8,7 +8,6 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include <unordered_set>
 #include <vector>
 
 namespace musical_calculator {
@@ -147,7 +146,12 @@ namespace musical_calculator {
             const note_t*   notes;
 
         public:
-            mode_tier_t(note_t* notes) :
+            mode_tier_t() :
+                notes(nullptr)
+            {
+            }
+
+            mode_tier_t(const note_t* notes) :
                 notes(notes)
             {
             }
@@ -175,6 +179,10 @@ namespace musical_calculator {
             std::vector<const note_t*>  scales;
 
         public:
+            scale_tier_t()
+            {
+            }
+
             scale_tier_t(const mode_tier_t& mode_tier,
                          const std::size_t  mode_count,
                          const std::size_t  mode_note_count)
@@ -258,9 +266,9 @@ namespace musical_calculator {
         }
 
     public:
-        note_t*                     notes;
-        std::vector<mode_tier_t>    mode_tiers;
-        std::vector<scale_tier_t>   scale_tiers;
+        note_t*         notes;
+        mode_tier_t     mode_tiers[CHROMATIC_NOTE_COUNT_p];
+        scale_tier_t    scale_tiers[CHROMATIC_NOTE_COUNT_p];
 
     public:
         chromatic_t()
@@ -268,34 +276,29 @@ namespace musical_calculator {
             this->notes = static_cast<note_t*>(malloc(sizeof(note_t) * CHROMATIC_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1]));
             assert(this->notes != nullptr);
 
+            note_t* notes = this->notes;
             std::vector<std::jthread> threads;
             threads.reserve(CHROMATIC_NOTE_COUNT_p);
-            note_t* notes = this->notes;
             for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
                 threads.push_back(std::jthread(
-                    [notes, idx]() -> void
+                    [this, notes, idx]() -> void
                     {
                         Write_Modes(notes, idx + 1);
+
+                        this->mode_tiers[idx] = mode_tier_t(notes);
+
+                        this->scale_tiers[idx] = scale_tier_t(
+                            this->mode_tiers[idx],
+                            CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx],
+                            CHROMATIC_TIER_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx]
+                        );
                     }
                 ));
+
                 notes += CHROMATIC_TIER_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx];
             }
             for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
                 threads[idx].join();
-            }
-
-            this->mode_tiers.reserve(CHROMATIC_NOTE_COUNT_p);
-            for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
-                this->mode_tiers.push_back({
-                    this->notes + (CHROMATIC_TIER_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx] - 1) });
-            }
-
-            this->scale_tiers.reserve(CHROMATIC_NOTE_COUNT_p);
-            for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
-                this->scale_tiers.push_back({
-                    this->mode_tiers[idx],
-                    CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx],
-                    CHROMATIC_TIER_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx] });
             }
         }
 
@@ -321,265 +324,11 @@ namespace musical_calculator {
         void
             Print_Modes()
         {
-            /*for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
+            for (std::size_t idx = 0, end = CHROMATIC_NOTE_COUNT_p; idx < end; idx += 1) {
                 this->mode_tiers[idx].Print_Modes(CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][idx], idx + 1);
-            }*/
-
-            const note_t* note = this->notes;
-            for (std::size_t tier_idx = 0, tier_end = CHROMATIC_NOTE_COUNT_p; tier_idx < tier_end; tier_idx += 1) {
-                for (std::size_t mode_idx = 0, mode_end = CHROMATIC_TIER_MODE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1][tier_idx]; mode_idx < mode_end; mode_idx += 1) {
-                    std::string mode = "";
-                    for (std::size_t note_idx = 0, note_end = tier_idx + 1; note_idx < note_end; note_idx += 1) {
-                        mode.push_back('0' + static_cast<char>(*note));
-                        note += 1;
-                    }
-                    std::cout << mode << std::endl;
-                }
             }
         }
     };
-
-    ///*
-    //    Gets the number of modes found within a chromatic scale
-    //    when the mode must be a certain number of notes long.
-    //*/
-    //constexpr std::size_t
-    //    Mode_Tier_Count(const std::size_t chromatic_note_count,
-    //                    const std::size_t mode_note_count)
-    //{
-    //    
-
-    //    assert(mode_note_count > 0);
-    //    assert(mode_note_count <= chromatic_note_count);
-    //    assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
-
-    //    return CHROMATIC_MODE_TIER_COUNTS[chromatic_note_count - 1][mode_note_count - 1];
-    //}
-
-    ///*
-    //    Gets the total number of modes found within a chromatic scale.
-    //*/
-    //constexpr std::size_t
-    //    Mode_Count(const std::size_t chromatic_note_count)
-    //{
-    //    // I would like to investigate supporting chromatic scales longer than 64
-    //    // but I can't help to think that it would rarely if every be useful
-    //    // and would be little more than a curiousity at best. 64 is plenty for now.
-    //    // However if we did support it, we would need to have a big integer type.
-    //    assert(chromatic_note_count > 0);
-    //    assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
-    //    assert(chromatic_note_count <= sizeof(std::size_t) * CHAR_BIT);
-
-    //    return std::size_t(1) << (chromatic_note_count - 1);
-    //}
-
-    ///*
-    //    This gets all the possible modes of the musical scale.
-    //    It only gathers modes for one key, the first note in the scale.
-
-    //    Keep in mind that these are not scales but modes. Scales have more
-    //    than one mode, e.g. the Diatonic scale has Ionian, Lydian, Aeolion, etc.
-
-    //    mode_note_count:
-    //        the size of each resultant mode.
-    //    chromatic_note_count:
-    //        the size of the chromatic mode/scale, i.e. the max number of notes.
-    //    mode_cache:
-    //        an optimzation to prevent the reallocation of a vector for repeated calls.
-    //    modes_cache:
-    //        the resultant modes, your return value. an optimization to prevent the reallocation of a vector for repeated calls.
-    //*/
-    //void
-    //    Modes(const std::size_t chromatic_note_count,
-    //          const std::size_t mode_note_count,
-    //          std::vector<std::size_t>& mode_cache,
-    //          std::vector<std::vector<std::size_t>>& modes_cache)
-    //{
-    //    assert(mode_note_count > 0);
-    //    assert(mode_note_count <= chromatic_note_count);
-    //    assert(chromatic_note_count <= MAX_CHROMATIC_NOTE_COUNT);
-
-    //    mode_cache.clear();
-    //    mode_cache.reserve(mode_note_count);
-    //    modes_cache.reserve(Mode_Count(chromatic_note_count, mode_note_count));
-
-    //    // the first mode is simply all the possible notes that can be taken
-    //    // from the chromatic scale without any skips, up to the mode_note_count.
-    //    for (std::size_t note = 1, last_note = mode_note_count; note <= last_note; note += 1) {
-    //        mode_cache.push_back(note);
-    //    }
-    //    modes_cache.push_back(mode_cache);
-
-    //    // we never change the first place, so if that's all there is, we go ahead and return.
-    //    if (mode_note_count > 1) {
-    //        // we can now proceed to mutate the mode by incrementing each place
-    //        // from the least significant digit to the most significant digit.
-    //        // we do not increment a place past the value of the lesser place to its
-    //        // right, thus we end up with combinations instead of permutations.
-    //        while (true) {
-    //            // get the least significant digit iterations first,
-    //            // because we can't check a lesser place. Therefore it
-    //            // can allow upto the total number of notes possible.
-    //            while (mode_cache[mode_note_count - 1] + 1 <= chromatic_note_count) {
-    //                mode_cache[mode_note_count - 1] += 1;
-    //                modes_cache.push_back(mode_cache);
-    //            }
-
-    //            // we need to find a greater place that can be incremented.
-    //            // if it doesn't exist, then we are finished. we don't consider
-    //            // idx 0 because we're only working with the one key, and so it
-    //            // can never be more than 1, and is thus never incrementable.
-    //            std::size_t next_idx = 0;
-    //            bool found_next_idx = false;
-    //            for (std::size_t idx = mode_note_count - 2; idx > 0; idx -= 1) {
-    //                if (mode_cache[idx] + 1 < mode_cache[idx + 1]) {
-    //                    next_idx = idx;
-    //                    found_next_idx = true;
-
-    //                    break;
-    //                }
-    //            }
-
-    //            // if we did find it, we increment the place by one and reset
-    //            // the lesser places for another iteration of while(true).
-    //            if (found_next_idx) {
-    //                mode_cache[next_idx] += 1;
-    //                for (std::size_t idx = next_idx + 1, end = mode_cache.size(); idx < end; idx += 1) {
-    //                    mode_cache[idx] = mode_cache[idx - 1] + 1;
-    //                }
-    //                modes_cache.push_back(mode_cache);
-
-    //                continue;
-    //            } else {
-    //                break;
-    //            }
-    //        }
-    //    }
-    //}
-
-    //void
-    //    Modes(const std::size_t chromatic_note_count,
-    //          std::vector<std::size_t>& mode_cache,
-    //          std::vector<std::vector<std::size_t>>& modes_cache)
-    //{
-    //    mode_cache.reserve(chromatic_note_count);
-    //    modes_cache.clear();
-    //    modes_cache.reserve(Mode_Count(chromatic_note_count));
-
-    //    for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
-    //         mode_note_count <= last_mode_note_count;
-    //         mode_note_count += 1) {
-    //        Modes(chromatic_note_count, mode_note_count, mode_cache, modes_cache);
-    //    }
-    //}
-
-    
-
-    //void
-    //    Modes_Parallel(const std::size_t chromatic_note_count,
-    //                   std::vector<std::size_t>& mode_cache,
-    //                   std::vector<std::vector<std::size_t>>& modes_cache)
-    //{
-    //    // because we have a limit on the chromatic_note_count,
-    //    // we'll just spawn all threads at the same time and let the os
-    //    // schedule everything for us automatically. this makes sense because
-    //    // some of these threads have to do a lot more work than others, and
-    //    // when an easy one finishes before a hard one, we might as well get
-    //    // it started on another.
-
-    //    // right now we're doing all of the tiers in their own threads, even ones
-    //    // that are more expensive to do in a thread, such as the octave and chromatic modes.
-    //    std::vector<std::jthread> threads;
-    //    threads.reserve(chromatic_note_count);
-
-    //    mode_cache.reserve(chromatic_note_count);
-
-    //    // we go ahead and allocate everything so that the underlying algorithm merely
-    //    // needs to fill in each mode's notes.
-    //    const std::size_t mode_count = Mode_Count(chromatic_note_count);
-    //    modes_cache.clear();
-    //    modes_cache.reserve(mode_count);
-    //    for (std::size_t mode = 0; mode < mode_count; mode += 1) {
-
-    //    }
-
-    //    
-
-    //    // if we can calculate easily the amount of modes that in each tier then
-    //    // we can make the array and hand out pointers to the threads to fill in for us.
-    //    // as it is, we would have to do a lot of copying which may defeat the gains from
-    //    // parallelization. another option would be to change the data-structure such
-    //    // that it's a vector of vectors of tiers of vectors of notes.
-
-    //    // I think to get this right we'll need to update the underlying Modes algorithm to
-    //    // write to pointers for us. that means anything above it will have to make sure that
-    //    // it has allocated the necessary memory, which is no longer a problem now that we know
-    //    // the exact number of possible modes per tier, statically at that.
-    //    // Probably want to keep the old algorithm around because that's how we determined the
-    //    // numbers in the first place.
-    //    std::vector<std::vector<std::size_t>*> pointers;
-    //    pointers.reserve(modes_cache.size());
-
-    //    for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
-    //         mode_note_count <= last_mode_note_count;
-    //         mode_note_count += 1) {
-    //        threads.push_back(std::jthread(
-    //            []() -> void
-    //            {
-    //                //Modes(chromatic_note_count, mode_note_count, mode_cache, modes_cache);
-    //            }
-    //        ));
-    //    }
-    //}
-
-    //std::vector<std::vector<std::size_t>>
-    //    Modes(const std::size_t chromatic_note_count,
-    //          const std::size_t mode_note_count)
-    //{
-    //    std::vector<std::size_t> mode;
-    //    std::vector<std::vector<std::size_t>> modes;
-
-    //    Modes(chromatic_note_count, mode_note_count, mode, modes);
-
-    //    return modes;
-    //}
-
-    //std::vector<std::vector<std::size_t>>
-    //    Modes(const std::size_t chromatic_note_count)
-    //{
-    //    std::vector<std::size_t> mode;
-    //    std::vector<std::vector<std::size_t>> modes;
-
-    //    Modes(chromatic_note_count, mode, modes);
-
-    //    return modes;
-    //}
-
-    //constexpr std::size_t
-    //    Scale_Count()
-    //{
-    //    // this needs to be updated to handle different chromatic scales, in fact the entire scale section does.
-    //    return 351;
-    //}
-
-    ///*
-    //    Prints out a vector of note sets, primarly for testing.
-    //*/
-    //void
-    //    Print_Note_Sets(const std::vector<std::vector<std::size_t>>& note_sets, std::string unit_name = "note_set")
-    //{
-    //    std::cout << "total " + unit_name + " count: " << note_sets.size() << std::endl;
-
-    //    for (std::size_t idx = 0, end = note_sets.size(); idx < end; idx += 1) {
-    //        const std::vector<std::size_t>& note_set = note_sets.at(idx);
-    //        std::string string;
-    //        for (std::size_t idx = 0, end = note_set.size(); idx < end; idx += 1) {
-    //            string += static_cast<char>(note_set.at(idx)) + '0';
-    //        }
-    //        std::cout << string << std::endl;
-    //    }
-    //    std::cout << std::endl;
-    //}
 
     ///*
     //    Takes a mode and results array. Generates all revolutions of a single mode,
@@ -612,18 +361,6 @@ namespace musical_calculator {
 
     //        results.push_back(revolution);
     //    }
-    //}
-
-    ///*
-    //    Optionally creates the revolutions vector for you.
-    //*/
-    //std::vector<std::vector<std::size_t>>
-    //    To_Modes(const std::vector<std::size_t>& scale)
-    //{
-    //    std::vector<std::vector<std::size_t>> modes;
-    //    To_Modes(scale, modes);
-
-    //    return modes;
     //}
 
     ///*
@@ -695,90 +432,11 @@ namespace musical_calculator {
     //    return scales;
     //}
 
-    ///*
-    //    A simple convenience. But if you need modes, it's more efficient to use To_Scales
-    //*/
-    //std::vector<std::vector<std::size_t>>
-    //    Scales()
-    //{
-    //    return To_Scales(Modes(12));
-    //}
-
-    //void
-    //    Print_Tests()
-    //{
-    //    std::vector<std::vector<std::size_t>> modes = Modes(12);
-    //    std::vector<std::vector<std::size_t>> scales = To_Scales(modes);
-
-    //    Print_Note_Sets(modes, "mode");
-    //    Print_Note_Sets(scales, "scale");
-
-    //    std::vector<std::size_t> diatonic_scale = { 1, 3, 5, 6, 8, 10, 12 };
-    //    std::vector<std::vector<std::size_t>> diatonic_modes = To_Modes(diatonic_scale);
-
-    //    Print_Note_Sets(diatonic_modes, "diatonic mode");
-
-    //    {
-    //        for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
-    //             chromatic_note_count <= last_chromatic_note_count;
-    //             chromatic_note_count += 1) {
-    //            std::size_t mode_count = Modes(chromatic_note_count).size();
-    //            assert(mode_count == Mode_Count(chromatic_note_count));
-
-    //            std::string message =
-    //                "there are " +
-    //                std::to_string(mode_count) +
-    //                " modes in a " +
-    //                std::to_string(chromatic_note_count) +
-    //                " note chromatic scale.";
-    //            std::cout << message << std::endl;
-    //        }
-    //    }
-
-    //    std::cout << std::endl;
-
-    //    {
-    //        for (std::size_t chromatic_note_count = 1, last_chromatic_note_count = 16;
-    //             chromatic_note_count <= last_chromatic_note_count;
-    //             chromatic_note_count += 1) {
-    //            for (std::size_t mode_note_count = 1, last_mode_note_count = chromatic_note_count;
-    //                 mode_note_count <= last_mode_note_count;
-    //                 mode_note_count += 1) {
-    //                auto modes = Modes(chromatic_note_count, mode_note_count);
-    //                assert(modes.size() == Mode_Count(chromatic_note_count, mode_note_count));
-    //            }
-    //        }
-    //    }
-
-    //    std::cout << std::endl;
-    //}
-
     void
         Print_Tests()
     {
         chromatic_t<12> chromatic;
         chromatic.Print_Modes();
-
-        /*for (std::size_t a = 0, end = MAX_CHROMATIC_NOTE_COUNT; a < end; a += 1) {
-            std::cout << "{ ";
-            for (std::size_t b = 0, end = a + 1; b < end; b += 1) {
-                std::cout << std::to_string(CHROMATIC_TIER_MODE_COUNTS[a][b] * (b + 1)) << ", ";
-            }
-            std::cout << "}" << std::endl;
-        }
-
-        for (std::size_t a = 0, end = MAX_CHROMATIC_NOTE_COUNT; a < end; a += 1) {
-            std::size_t result = 0;
-            for (std::size_t b = 0, end = a + 1; b < end; b += 1) {
-                result += CHROMATIC_TIER_MODE_NOTE_COUNTS[a][b];
-            }
-            std::cout << std::to_string(result) << "," << std::endl;
-        }
-
-        for (std::size_t a = 0, end = MAX_CHROMATIC_NOTE_COUNT; a < end; a += 1) {
-            std::size_t result = std::size_t(1) << (a);
-            std::cout << std::to_string(result) << "," << std::endl;
-        }*/
     }
 
 }
