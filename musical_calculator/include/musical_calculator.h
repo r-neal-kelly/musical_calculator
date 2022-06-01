@@ -5,20 +5,44 @@
 #pragma once
 
 #include <cassert>
+#include <climits>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
+
+namespace musical_calculator {
+
+    using count_t   = std::size_t;
+    using index_t   = std::size_t;
+
+    using note_t    = std::size_t;
+
+    class mode_t;
+    class scale_t;
+
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class mode_tier_t;
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class scale_tier_t;
+
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class chromatic_t;
+
+}
 
 namespace musical_calculator {
 
     // It becomes computationally expensive to calculate with pretty much any chromatic after 24.
-    constexpr std::size_t MAX_CHROMATIC_NOTE_COUNT = 24;
+    constexpr count_t MAX_CHROMATIC_NOTE_COUNT  = 24;
 
     // if (mode_note_count > 1)
     //     return (chromatic_note_count - 1) choose (mode_note_count - 1)
     // else
     //     return 1
-    constexpr std::size_t CHROMATIC_TIER_MODE_COUNTS[MAX_CHROMATIC_NOTE_COUNT][MAX_CHROMATIC_NOTE_COUNT] = {
+    constexpr count_t CHROMATIC_TIER_MODE_COUNTS[MAX_CHROMATIC_NOTE_COUNT][MAX_CHROMATIC_NOTE_COUNT] = {
         { 1 },
         { 1, 1 },
         { 1, 2, 1 },
@@ -46,7 +70,7 @@ namespace musical_calculator {
     };
 
     // map chromatic_tier_mode_counts[chromatic_note_count - 1][chromatic_tier_idx] *= (chromatic_tier_idx + 1)
-    constexpr std::size_t CHROMATIC_TIER_MODE_NOTE_COUNTS[MAX_CHROMATIC_NOTE_COUNT][MAX_CHROMATIC_NOTE_COUNT] = {
+    constexpr count_t CHROMATIC_TIER_MODE_NOTE_COUNTS[MAX_CHROMATIC_NOTE_COUNT][MAX_CHROMATIC_NOTE_COUNT] = {
         { 1 },
         { 1, 2 },
         { 1, 4, 3 },
@@ -73,8 +97,8 @@ namespace musical_calculator {
         { 1, 46, 759, 7084, 44275, 201894, 706629, 1961256, 4412826, 8171900, 12584726, 16224936, 17577014, 16016924, 12257850, 7845024, 4167669, 1817046, 639331, 177100, 37191, 5566, 529, 24 }
     };
 
-    // std::size_t(1) << (chromatic_note_count - 1)
-    constexpr std::size_t CHROMATIC_MODE_COUNTS[MAX_CHROMATIC_NOTE_COUNT] = {
+    // count_t(1) << (chromatic_note_count - 1)
+    constexpr count_t CHROMATIC_MODE_COUNTS[MAX_CHROMATIC_NOTE_COUNT] = {
         1,
         2,
         4,
@@ -102,7 +126,7 @@ namespace musical_calculator {
     };
 
     // fold + chromatic_tier_mode_note_counts[chromatic_note_count - 1]
-    constexpr std::size_t CHROMATIC_MODE_NOTE_COUNTS[MAX_CHROMATIC_NOTE_COUNT] = {
+    constexpr count_t CHROMATIC_MODE_NOTE_COUNTS[MAX_CHROMATIC_NOTE_COUNT] = {
         1,
         3,
         8,
@@ -133,34 +157,29 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
-    using note_t =
-        std::size_t;
-
-}
-
-namespace musical_calculator {
-
     class mode_t
     {
     public:
-        static void Print(const note_t* const notes, const std::size_t note_count);
+        static void Print(const note_t* const notes, const count_t note_count) noexcept;
+        static void Print(const mode_t& mode) noexcept;
+        static void Print(mode_t&& mode) noexcept;
 
     public:
         const note_t*   notes;
-        std::size_t     note_count;
+        count_t         note_count;
 
     public:
-        mode_t(const note_t* const notes, const std::size_t note_count);
+        mode_t(const note_t* const notes, const count_t note_count) noexcept;
 
     public:
-        std::size_t     Note_Count();
-        const note_t*   Notes();
-        note_t          Note(std::size_t index);
+        count_t         Note_Count() noexcept;
+        const note_t*   Notes() noexcept;
+        note_t          Note(index_t index) noexcept;
 
-        void            Print();
+        void            Print() noexcept;
 
     public:
-        note_t  operator [](std::size_t index);
+        note_t  operator [](index_t index) noexcept;
     };
 
 }
@@ -171,7 +190,82 @@ namespace musical_calculator {
         public mode_t
     {
     public:
-        scale_t(const note_t* const notes, const std::size_t note_count);
+        scale_t(const note_t* const notes, const count_t note_count) noexcept;
+    };
+
+}
+
+namespace musical_calculator {
+
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class mode_tier_t
+    {
+    public:
+        const note_t*   notes;
+
+    public:
+        mode_tier_t() noexcept;
+        mode_tier_t(note_t* notes, const count_t mode_note_count) noexcept;
+
+    public:
+        void    Print_Modes(const count_t mode_count, const count_t mode_note_count) noexcept;
+    };
+
+}
+
+namespace musical_calculator {
+
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class scale_tier_t
+    {
+    public:
+        static void Scale_Modes(const note_t*   scale,
+                                const count_t   scale_note_count,
+                                note_t* const   results) noexcept;
+
+    public:
+        std::vector<const note_t*>  scales;
+
+    public:
+        scale_tier_t() noexcept;
+        scale_tier_t(const mode_tier_t<CHROMATIC_NOTE_COUNT_p>& mode_tier,
+                     const count_t                              mode_count,
+                     const count_t                              mode_note_count);
+
+    public:
+        void    Print_Scales(const count_t scale_note_count) noexcept;
+    };
+
+}
+
+namespace musical_calculator {
+
+    template <count_t CHROMATIC_NOTE_COUNT_p>
+    class chromatic_t
+    {
+    public:
+        static_assert(CHROMATIC_NOTE_COUNT_p <= MAX_CHROMATIC_NOTE_COUNT);
+
+    public:
+        note_t*                                 notes;
+        mode_tier_t<CHROMATIC_NOTE_COUNT_p>     mode_tiers[CHROMATIC_NOTE_COUNT_p];
+        scale_tier_t<CHROMATIC_NOTE_COUNT_p>    scale_tiers[CHROMATIC_NOTE_COUNT_p];
+
+    public:
+        chromatic_t();
+        ~chromatic_t() noexcept;
+
+    public:
+        constexpr count_t       Chromatic_Note_Count() noexcept;
+        constexpr count_t       Mode_Count() noexcept;
+        count_t                 Scale_Count() noexcept;
+
+        std::vector<mode_t>     Modes();
+        std::vector<scale_t>    Scales();
+
+    public:
+        void    Print_Modes() noexcept;
+        void    Print_Scales() noexcept;
     };
 
 }
