@@ -35,7 +35,9 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
-    // It becomes computationally expensive to calculate with pretty much any chromatic after 24.
+    // It becomes quite memory intensive to work with chromatic scales that have more than 24 notes.
+    // Also placing a static limit allows us to more easily store static information that massively speeds
+    // up the generation of all the patterns we're interested in, such as modes and scales.
     constexpr count_t MAX_CHROMATIC_NOTE_COUNT  = 24;
 
     // if (mode_note_count > 1)
@@ -157,6 +159,18 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
+    /*
+        A mode is a unique combination of chromatic notes.
+        It's a subset of all possible notes without regard to order or repetition.
+
+        It's represented numerically by the chromatic notes, e.g.:
+            (1 3 5)     is a tier 3 mode in any chromatic scale of 5 or more notes.
+            (1 6 8 12)  is a tier 4 mode in any chromatic scale of 12 or more notes.
+            (1 24)      is a tier 2 mode in any chromatic scale of 24 or more notes.
+
+        Notice that each modes starts with 1. This is because we only need to calcuate
+        one key, the patterns of which all other keys share in common.
+    */
     class mode_t
     {
     public:
@@ -186,6 +200,18 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
+    /*
+        A scale is any mode of a set of modes which can be derived from its other modes.
+        For example the mode (1 3 5) has derived modes (3 5 1) and (5 1 3). Any one of
+        these can represent its other modes. The set itself is considered the scale,
+        and is programmatically representable by any one of its individual modes.
+
+        Keep in mind that all modes are normalized to one key. Therefore the modes of (1 3 5)
+        in a 12 note chromatic scale are:
+        (1 3 5) -> (1 3 5)
+        (3 5 1) -> (1 3 11)
+        (5 1 3) -> (1 9 11)
+    */
     class scale_t :
         public mode_t
     {
@@ -197,6 +223,9 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
+    /*
+        A mode tier contains all the modes of the same note-count found in a chromatic scale.
+    */
     template <count_t CHROMATIC_NOTE_COUNT_p>
     class mode_tier_t
     {
@@ -215,6 +244,9 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
+    /*
+        A scale tier contains all scales of the same note-count found in a chromatic scale.
+    */
     template <count_t CHROMATIC_NOTE_COUNT_p>
     class scale_tier_t
     {
@@ -240,6 +272,22 @@ namespace musical_calculator {
 
 namespace musical_calculator {
 
+    /*
+        A chromatic is a set of a possible notes,
+        a set of all possible modes, or combination of the notes in one key,
+        and a set of all possible unique scales, or unique sets of modes which have members that derive each other.
+
+        For example, the standard Diatonic scale (C D E F G A B) is derived from a 12 note chromatic scale.
+        It can be represented with the numbers (1 3 5 6 8 10 12)
+        and it has seven modes: Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, and Locrian,
+        all of which can be represented numerically and can derive one another.
+
+        One of the most interesting questions this program answers is, how many unique scales
+        can be derived from the chromatic? In the future I will be expanding this to answer even more
+        interesting questions that I had when I began developing my music theory about a decade ago.
+        Eventually it will be useful in generating patterns that can be learned to assist with naturally
+        good sounding ways to change key, mode, scale, and even chromatics.
+    */
     template <count_t CHROMATIC_NOTE_COUNT_p>
     class chromatic_t
     {

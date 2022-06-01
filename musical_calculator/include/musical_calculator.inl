@@ -194,6 +194,7 @@ namespace musical_calculator {
                                                           note_t* const results)
         noexcept
     {
+        // the first mode is always going to be the scale (or first mode) that is passed in.
         for (index_t idx = 0, end = scale_note_count; idx < end; idx += 1) {
             results[idx] = scale[idx];
         }
@@ -212,8 +213,7 @@ namespace musical_calculator {
             }
             results[this_mode_idx + scale_note_count - 1] = results[previous_mode_idx + 0] + CHROMATIC_NOTE_COUNT_p;
 
-            // then for each subsequent note after the new first note,
-            // we add the total note count and subtract by new_first_note - 1.
+            // then for each subsequent note we add the total note count and subtract by new_first_note - 1.
             const count_t first_note_diff = results[this_mode_idx + 0] - 1;
             for (index_t note_idx = 0, note_end = scale_note_count;
                  note_idx < note_end;
@@ -233,23 +233,30 @@ namespace musical_calculator {
                                                        const count_t                                mode_count,
                                                        const count_t                                mode_note_count)
     {
-        // we use this to generate all the modes from a scale
+        // we use this to successively generate all of mode's deriviations performantly
         note_t* note_cache = static_cast<note_t*>(malloc(sizeof(note_t) * mode_note_count * mode_note_count));
         assert(note_cache != nullptr);
 
-        //this->scales.reserve(0); // once we know all the static values for each chromatic, we can do this up front.
+        // once we know all the static values for each chromatic, we can do this up front for performance.
+        //this->scales.reserve(0);
 
+        // We iterate over the modes to generate an array of pointers to the first occurence of unique scales.
+        // We can do this extremely cheaply by utilizing the fact that we generate the modes in numerical order.
+        // It is always the case then that the first occurence of a unique scale will be the mode in a set that equates
+        // to the lowest numerical number. Therefore if we see a mode that is numerically bigger than it deriviations
+        // we know we have already added that mode's scale to the array. We completely avoid lookups doing this,
+        // and thus achieve a high level of efficiency and performance while working with the massive number of
+        // modes that exist in the larger chromatic scales and their tiers of modes.
         auto Has_Mode_Scale = [](const std::vector<const note_t*>&  scales,
                                  const note_t*                      mode,
                                  const count_t                      mode_note_count,
                                  note_t* const                      note_cache) -> bool
         {
-            // we cache all the possible revolutions of the mode so that
-            // we can quickly search them per scale.
+            // we cache all the possible deriviations or revolutions of the mode.
+            // notice that we do not allocate and deallocate memory, which would be very non-performant
             Scale_Modes(mode, mode_note_count, note_cache);
 
-            // instead of looking in the vector, what we do is see if the first mode is a smaller number.
-            // if it's smaller than the others, it's a new scale, else the vector should already have it.
+            // if the first mode is numerically smaller than its deriviations, it's the first occurence of a unique scale
             for (index_t mode_idx = mode_note_count, mode_end = mode_note_count * mode_note_count;
                  mode_idx < mode_end;
                  mode_idx += mode_note_count) {
@@ -267,7 +274,6 @@ namespace musical_calculator {
             return false;
         };
 
-        // just add the first instance of each unique set of modes, which is its scale.
         for (index_t modes_idx = 0, modes_end = mode_count * mode_note_count;
              modes_idx < modes_end;
              modes_idx += mode_note_count) {
@@ -302,9 +308,17 @@ namespace musical_calculator {
     template <count_t CHROMATIC_NOTE_COUNT_p>
     chromatic_t<CHROMATIC_NOTE_COUNT_p>::chromatic_t()
     {
+        // We allocate enough memory to store all modes in the chromatic scale in one place,
+        // primary for performance purposes and to avoid using more memory than necessary when dissecting the modes.
         this->notes = static_cast<note_t*>(malloc(sizeof(note_t) * CHROMATIC_MODE_NOTE_COUNTS[CHROMATIC_NOTE_COUNT_p - 1]));
         assert(this->notes != nullptr);
 
+        // We concurrently computate modes and subsequently their scales.
+        // Each mode tier and thus scale tier does not rely on any other tier.
+        // Some tiers take way longer to calcuate than others. Some shouldn't
+        // even be done concurrently because it would be faster to just do them
+        // in this thread. We currently do all tiers concurrently just because it's
+        // simpler to write and read, and the time saved is currently not significant.
         note_t* notes = this->notes;
         std::vector<std::jthread> threads;
         threads.reserve(CHROMATIC_NOTE_COUNT_p);
@@ -312,6 +326,7 @@ namespace musical_calculator {
             threads.push_back(std::jthread(
                 [this, notes, idx]() -> void
                 {
+                    // we always have to calcuate each tier's modes before each tier's scales.
                     this->mode_tiers[idx] = mode_tier_t<CHROMATIC_NOTE_COUNT_p>(notes, idx + 1);
 
                     this->scale_tiers[idx] = scale_tier_t<CHROMATIC_NOTE_COUNT_p>(
